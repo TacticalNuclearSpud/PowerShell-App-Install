@@ -1,5 +1,5 @@
 Write-Host 'Install NuGet'
-"Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force"
+Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force
 
 Write-Host "Install UI.XAML"
 $url = "https://www.nuget.org/api/v2/package/Microsoft.UI.Xaml/2.7.1"
