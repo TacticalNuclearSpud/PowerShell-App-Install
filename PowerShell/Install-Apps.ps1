@@ -22,9 +22,9 @@ function Get-AzCopy {
         Write-Host ' * azcopy already exists in the correct location'
     }
     else {
-        Write-Host (' * azcopy not found')
+        Write-Host (' ! azcopy not found')
         #Check if AppInstall folder exists and create if not
-        Write-Host ('- Attempting to create {0}...' -f $WorkingFolder)
+        Write-Host ('- Attempting to create working folder...')
         if (Test-Path -Path $WorkingFolder) {
             Write-Host ('  * {0} folder already exists' -f $WorkingFolder)
         }
@@ -32,33 +32,33 @@ function Get-AzCopy {
             $null = New-Item -ItemType Directory -Path $WorkingFolder
     
             if (Test-Path $WorkingFolder) {
-                Write-Host ('  > {0} created succesfully' -f $WorkingFolder)
+                Write-Host ('  * {0} created succesfully' -f $WorkingFolder)
                 #Download azcopy
                 Write-Host '- Attempting to download AzCopy...'
                 Invoke-WebRequest -Uri 'https://aka.ms/downloadazcopy-v10-windows' -OutFile $azcopyPath
 
                 if (Test-Path $azcopyPath) {
-                    Write-Host '  > download complete'
+                    Write-Host '  * download complete'
                     #Expand the archive
-                    Write-Host '  > Attempting to expand archive...'
+                    Write-Host '  - Attempting to expand archive...'
                     Expand-Archive -Path $azcopyPath -DestinationPath $WorkingFolder
                     Copy-Item -Path $azcopyExtractedPath -Destination $WorkingFolder
 
                     #Check final move
                     if (Test-Path -Path $azcopyFinalPath) {
-                        Write-Host '  > Archive expansion and file move successful'
+                        Write-Host '   * Archive expansion and file move successful'
                     }
                     else {
-                        Write-Host '  * Something went wrong with file move'
+                        Write-Host '   ! Something went wrong with file move'
                     }
             
                 }
                 else {
-                    Write-Host '  * error during download'
+                    Write-Host '  ! error during download'
                 }
             }
             else {
-                Write-Host ('  * error creating {0} folder' -f $WorkingFolder)
+                Write-Host ('  ! error creating {0} folder' -f $WorkingFolder)
             }
         }
     }
@@ -79,14 +79,14 @@ function Get-Installer {
    
     #Test for existing installer
     if (Test-Path -Path $Destination) {
-        Write-Host '   * installer already exists'
+        Write-Host '  * installer already exists'
     }
     else {
         #Download installer
         $null = C:\AppInstall\azcopy.exe copy $Source $Destination
         #Test for success
         if (Test-Path -Path $Destination) {
-            Write-Host '   > download successful'
+            Write-Host '   * download successful'
         }
         else {
             Write-Host '   ! error during download'
@@ -97,47 +97,53 @@ function Get-Installer {
 function Install-App {
     param (
         [Parameter(Mandatory)]
-        [string]$AppName,
-        [Parameter(Mandatory)]
-        [string]$InstallerFileName,
-        [Parameter(Mandatory)]
-        [string]$InstallLocation,
+        [psobject]$AppConfig,
         [Parameter(Mandatory)]
         [string]$WorkingFolder
     )
-
-    $installerLocation = '{0}\{1}' -f $WorkingFolder, $InstallerFileName
     
+    Write-Host ('- Installation of {0} is required...' -f $AppConfig.Name)
+
     #Check for existing install
-    Write-Host ('- Attempting to install {0}' -f $AppName)
-    if (Test-Path -Path $InstallLocation) {
-        Write-Host (' * {0} is already installed' -f $AppName)
+    if (Test-Path -Path $AppConfig.InstallLocation) {
+        Write-Host (' * {0} is already installed' -f $AppConfig.Name)
     }
     else {
         try {
+            #Get the installer file
+            $installerFileName = Get-Installer -Source $app.InstallerSource -WorkingFolder $workingFolder
+            $installerLocation = '{0}\{1}' -f $WorkingFolder, $InstallerFileName
+
             #Start Installer
-            Start-Process -FilePath $installerLocation -Args "/S" -Verb RunAs -Wait
+            Start-Process -FilePath $installerLocation -Args $AppConfig.Arguments -Verb RunAs -Wait
 
             #Check for success
-            if (Test-Path $InstallLocation) {
-                Write-Host (' > {0} has been successfully installed!' -f $AppName)
+            if (Test-Path $AppConfig.InstallLocation) {
+                Write-Host ('   * {0} has been successfully installed!' -f $AppConfig.Name)
             }
             else {
-                Write-Host (' * unable to locate {0} after install' -f $AppName)
+                Write-Host ('   ! unable to locate {0} after install' -f $AppConfig.Name)
             }
         }
         catch {
             $errorMessage = $_.Exception.Message
-            Write-Host " * ERROR: $errorMessage"
+            Write-Host "   ! ERROR: $errorMessage"
         }
     } 
 }
 
 $apps = @(
     @{
-        Name         = '7Zip'
+        Name = 'Visual Studio Code'
+        InstallLocation = "C:\Program Files\Microsoft VS Code\Code.exe"
+        InstallerSource = 'https://sadscmb0216.blob.core.windows.net/installers/VSCodeSetup-x64-1.80.0.exe'
+        Arguments = "/VERYSILENT /NORESTART /MERGETASKS=!runcode"
+    },
+    @{
+        Name = '7Zip'
         InstallLocation = "C:\Program Files\7-Zip\7zFM.exe"
         InstallerSource = 'https://sadscmb0216.blob.core.windows.net/installers/7z2301-x64.exe'
+        Arguments = "/S"
     }
 )
 
@@ -147,11 +153,9 @@ $workingFolder = 'C:\AppInstall\'
 Get-AzCopy -WorkingFolder $workingFolder
 
 foreach ($app in $apps) {
-    #Get the installer file
-    $installerFileName = Get-Installer -Source $app.InstallerSource -WorkingFolder $workingFolder
-
+    
     #Install the App
-    Install-App -AppName $app.Name -InstallerFileName $installerFileName -InstallLocation $app.InstallLocation -WorkingFolder $workingFolder
+    Install-App -AppConfig $app -WorkingFolder $workingFolder
 }
 
 
